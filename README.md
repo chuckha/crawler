@@ -7,3 +7,4 @@ Tags:
 0 - The very first iteration.
 1 - Refactored to high and low level functions.
 2 - The high-level function no longer depends on the low-level functions.
+3 - Use interfaces to define the abstractions.

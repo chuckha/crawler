@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	page, err := CrawlPage(start, PageReader, LinkExtractor)
+	page, err := CrawlPage(start, &PageReader{}, &LinkExtractor{})
 	if err != nil {
 		panic(err)
 	}
@@ -34,8 +34,11 @@ type Page struct {
 	Links    []*url.URL
 }
 
-// PageReader reads a web page.
-func PageReader(u *url.URL) (io.ReadCloser, error) {
+// PageReader is a struct that holds dependencies for reading pages.
+type PageReader struct{}
+
+// ReadPage reads a web page.
+func (p *PageReader) ReadPage(u *url.URL) (io.ReadCloser, error) {
 	// fetch url
 	resp, err := http.DefaultClient.Get(u.String())
 	if err != nil {
@@ -44,8 +47,11 @@ func PageReader(u *url.URL) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-// LinkExtractor extracts urls from from html contents
-func LinkExtractor(page io.Reader) []*url.URL {
+// LinkExtractor is a struct to hold dependencies for extracting links.
+type LinkExtractor struct{}
+
+// ExtractLinks extracts urls from from html contents.
+func (e *LinkExtractor) ExtractLinks(page io.Reader) []*url.URL {
 	links := make([]*url.URL, 0)
 	doc, err := html.Parse(page)
 	if err != nil {
@@ -74,9 +80,19 @@ func LinkExtractor(page io.Reader) []*url.URL {
 	return links
 }
 
+// These shouldn't be reusable, they are designed specifically for CrawlPage
+
+type pageReader interface {
+	ReadPage(*url.URL) (io.ReadCloser, error)
+}
+
+type linkExtractor interface {
+	ExtractLinks(io.Reader) []*url.URL
+}
+
 // CrawlPage will attempt to read the URL, extract links from it and return the page.
-func CrawlPage(u *url.URL, pageReader func(*url.URL) (io.ReadCloser, error), linkExtractor func(io.Reader) []*url.URL) (*Page, error) {
-	body, err := pageReader(u)
+func CrawlPage(u *url.URL, pageReader pageReader, linkExtractor linkExtractor) (*Page, error) {
+	body, err := pageReader.ReadPage(u)
 
 	contents, err := ioutil.ReadAll(body)
 	if err != nil {
@@ -90,7 +106,7 @@ func CrawlPage(u *url.URL, pageReader func(*url.URL) (io.ReadCloser, error), lin
 	}
 
 	buf := bytes.NewReader(contents)
-	links := linkExtractor(buf)
+	links := linkExtractor.ExtractLinks(buf)
 	page.Links = links
 	return page, nil
 }

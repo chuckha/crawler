@@ -1,12 +1,15 @@
 Problems with this version:
 
-This very small change makes the high-level code much less coupled. The
-high-level function no longer depends on the low-level functions. The
-dependencies are explicitly passed into CrawlPage.
+We've improved the code to clean up the function signature of CrawlPage and have
+added a few types to help support the low-level functions as well as satisfy the
+interfaces we have defined.
 
-The with the high-level code is fairly minor now. It's hard to read, but
-honestly, since it's not the longest function it's not even that hard to read.
-It's easily testable. We no longer need a network to test CrawlPage.
+The problem is still that our low-level functions depend on lower-level
+functions.
 
-However, we still have a problem with the low-level functions. The low-level
-functions don't depend on abstractions. They depend on other low-level modules.
+However, if we want to test literally any line of code in the CrawlPage function
+we can easily do so. We must construct linkExtractors and or pageReaders that
+will execute the exact line of code we wish to test. Since we *can* test any
+code easily we don't need to write tests until something goes wrong. At least,
+I'm not going to spend time writing tests to get to 100% test coverage when
+everything is probably working any way.
