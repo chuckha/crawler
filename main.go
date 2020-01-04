@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -22,7 +23,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(page)
+	for _, link := range page.Links {
+		fmt.Println(link)
+	}
 }
 
 // Page represents a single HTML page
@@ -31,31 +34,23 @@ type Page struct {
 	Links    []*url.URL
 }
 
-// CrawlPage will attempt to read the URL, extract links from it and return the page.
-func CrawlPage(u *url.URL) (*Page, error) {
+// PageReader reads a web page.
+func PageReader(u *url.URL) (io.ReadCloser, error) {
 	// fetch url
 	resp, err := http.DefaultClient.Get(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get page %s: %v", u, err)
 	}
+	return resp.Body, nil
+}
 
-	contents, err := ioutil.ReadAll(resp.Body)
+// LinkExtractor extracts urls from from html contents
+func LinkExtractor(page io.Reader) []*url.URL {
+	links := make([]*url.URL, 0)
+	doc, err := html.Parse(page)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read respons body: %v", err)
-	}
-	if err := resp.Body.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close body: %v", err)
-	}
-	page := &Page{
-		Contents: contents,
-		Links:    []*url.URL{},
-	}
-
-	buf := bytes.NewReader(contents)
-	doc, err := html.Parse(buf)
-	if err != nil {
-		fmt.Println(err)
-		return page, nil
+		fmt.Printf("error parsing page: %v\n", err)
+		return links
 	}
 	var f func(*html.Node)
 	f = func(n *html.Node) {
@@ -64,10 +59,10 @@ func CrawlPage(u *url.URL) (*Page, error) {
 				if a.Key == "href" {
 					link, err := url.Parse(a.Val)
 					if err != nil {
-						fmt.Println(err)
+						fmt.Printf("failed to parse url %q: %v", a.Val, err)
 						continue
 					}
-					page.Links = append(page.Links, link)
+					links = append(links, link)
 				}
 			}
 		}
@@ -76,5 +71,26 @@ func CrawlPage(u *url.URL) (*Page, error) {
 		}
 	}
 	f(doc)
+	return links
+}
+
+// CrawlPage will attempt to read the URL, extract links from it and return the page.
+func CrawlPage(u *url.URL) (*Page, error) {
+	body, err := PageReader(u)
+
+	contents, err := ioutil.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %v", err)
+	}
+	if err := body.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close body: %v", err)
+	}
+	page := &Page{
+		Contents: contents,
+	}
+
+	buf := bytes.NewReader(contents)
+	links := LinkExtractor(buf)
+	page.Links = links
 	return page, nil
 }
