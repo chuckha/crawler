@@ -12,6 +12,13 @@ import (
 	"golang.org/x/net/html"
 )
 
+// Wrap up the html.Parse function to encapsulate the dependency.
+type htmlParser struct{}
+
+func (h *htmlParser) Parse(r io.Reader) (*html.Node, error) {
+	return html.Parse(r)
+}
+
 // Interfaces with user
 func main() {
 	input := os.Args[1]
@@ -19,7 +26,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	page, err := CrawlPage(start, &PageReader{}, &LinkExtractor{})
+
+	// Populate the real dependencies.
+	pageReader := &PageReader{
+		getter: http.DefaultClient,
+	}
+	linkExtractor := &LinkExtractor{
+		parser: &htmlParser{},
+	}
+
+	page, err := CrawlPage(start, pageReader, linkExtractor)
 	if err != nil {
 		panic(err)
 	}
@@ -34,26 +50,38 @@ type Page struct {
 	Links    []*url.URL
 }
 
+type getter interface {
+	Get(string) (*http.Response, error)
+}
+
 // PageReader is a struct that holds dependencies for reading pages.
-type PageReader struct{}
+type PageReader struct {
+	getter getter
+}
 
 // ReadPage reads a web page.
 func (p *PageReader) ReadPage(u *url.URL) (io.ReadCloser, error) {
 	// fetch url
-	resp, err := http.DefaultClient.Get(u.String())
+	resp, err := p.getter.Get(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get page %s: %v", u, err)
 	}
 	return resp.Body, nil
 }
 
+type parser interface {
+	Parse(io.Reader) (*html.Node, error)
+}
+
 // LinkExtractor is a struct to hold dependencies for extracting links.
-type LinkExtractor struct{}
+type LinkExtractor struct {
+	parser parser
+}
 
 // ExtractLinks extracts urls from from html contents.
 func (e *LinkExtractor) ExtractLinks(page io.Reader) []*url.URL {
 	links := make([]*url.URL, 0)
-	doc, err := html.Parse(page)
+	doc, err := e.parser.Parse(page)
 	if err != nil {
 		fmt.Printf("error parsing page: %v\n", err)
 		return links
