@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	page, err := CrawlPage(start)
+	page, err := CrawlPage(start, PageReader, LinkExtractor)
 	if err != nil {
 		panic(err)
 	}
@@ -75,8 +75,8 @@ func LinkExtractor(page io.Reader) []*url.URL {
 }
 
 // CrawlPage will attempt to read the URL, extract links from it and return the page.
-func CrawlPage(u *url.URL) (*Page, error) {
-	body, err := PageReader(u)
+func CrawlPage(u *url.URL, pageReader func(*url.URL) (io.ReadCloser, error), linkExtractor func(io.Reader) []*url.URL) (*Page, error) {
+	body, err := pageReader(u)
 
 	contents, err := ioutil.ReadAll(body)
 	if err != nil {
@@ -90,7 +90,7 @@ func CrawlPage(u *url.URL) (*Page, error) {
 	}
 
 	buf := bytes.NewReader(contents)
-	links := LinkExtractor(buf)
+	links := linkExtractor(buf)
 	page.Links = links
 	return page, nil
 }
